@@ -219,12 +219,39 @@
     else stopPreview();
   });
 
+  // Debug score details
+  function showScoreInfo() {
+    var info = 'Score: ' + (api.score ? api.score.title : 'null');
+    if (api.score) {
+      info += ' | Tracks: ' + api.score.tracks.length;
+      info += ' | MasterBars: ' + api.score.masterBars.length;
+      if (api.score.tracks.length > 0) {
+        var track = api.score.tracks[0];
+        info += ' | Staves: ' + track.staves.length;
+        if (track.staves.length > 0) {
+          info += ' | Bars: ' + track.staves[0].bars.length;
+        }
+      }
+    }
+    console.log('[Player]', info);
+    infoEl.textContent = info;
+  }
+
+  api.renderFinished.on(function() {
+    console.log('[Player] Render finished');
+    showScoreInfo();
+  });
+
   // --- Auto-load ---
   if (alphaTex) {
     infoEl.textContent = '谱子已加载 (' + alphaTex.length + ' 字符)';
     bpmInput.value = bpm;
     btnPreview.disabled = true;
-    setTimeout(function() { loadScore(alphaTex); }, 200);
+    setTimeout(function() {
+      loadScore(alphaTex);
+      // Check score after a delay
+      setTimeout(showScoreInfo, 500);
+    }, 200);
   }
 
   // --- BPM controls ---
