@@ -60,35 +60,8 @@
 </style>
 </head>
 <body>
-<div id="debug" style="padding:8px;background:#e8f5e9;font-size:12px;word-break:break-all;color:#333;"></div>
 <div id="info">加载中...</div>
 <div id="alphaTab"></div>
-<script>
-// Show page URL for debugging
-var dbg = document.getElementById('debug');
-dbg.textContent = 'URL: ' + window.location.href;
-// Parse hash data IMMEDIATELY (before external script loads)
-(function(){
-  var hash = window.location.hash;
-  dbg.textContent += ' | Hash: ' + hash;
-  if (hash && hash.length > 1) {
-    try {
-      var decoded = decodeURIComponent(hash.substring(1));
-      var data = JSON.parse(decoded);
-      window.__alphaTex = data.alphaTex || '';
-      window.__bpm = data.bpm || 100;
-      document.getElementById('info').textContent = '已就绪 (' + (window.__alphaTex.length) + ' chars)';
-      dbg.textContent += ' | Parsed OK';
-    } catch(e) {
-      console.error('Hash parse error:', e);
-      document.getElementById('info').textContent = '解析失败: ' + e.message;
-      dbg.textContent += ' | Parse ERROR: ' + e.message;
-    }
-  } else {
-    document.getElementById('info').textContent = '无谱子数据 (hash为空)';
-  }
-})();
-</script>
 <div id="controls">
   <div class="row">
     <div class="bpm-group">
@@ -112,6 +85,21 @@ dbg.textContent = 'URL: ' + window.location.href;
 <script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/alphaTab.min.js"></script>
 <script>
 (function() {
+  // --- Read data from query param ---
+  var alphaTex = '';
+  var bpm = 100;
+  var params = new URLSearchParams(window.location.search);
+  var d = params.get('d');
+  if (d) {
+    try {
+      var data = JSON.parse(decodeURIComponent(d));
+      alphaTex = data.alphaTex || '';
+      bpm = data.bpm || 100;
+    } catch(e) {
+      document.getElementById('info').textContent = '数据解析失败';
+    }
+  }
+
   var api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
     core: { fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/font/' },
     display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
@@ -119,8 +107,6 @@ dbg.textContent = 'URL: ' + window.location.href;
   });
 
   var state = 'idle';
-  var bpm = 100;
-  var alphaTex = '';
   var animId = null;
   var startTime = 0;
   var pausedElapsed = 0;
@@ -133,14 +119,12 @@ dbg.textContent = 'URL: ' + window.location.href;
   var statusText = document.getElementById('statusText');
   var statusDot = document.getElementById('statusDot');
   var timerEl = document.getElementById('timer');
+  var infoEl = document.getElementById('info');
 
-  function fmt(sec) {
-    var m = Math.floor(sec/60), s = Math.floor(sec%60);
-    return m + ':' + (s<10?'0':'') + s;
-  }
+  function fmt(sec) { var m=Math.floor(sec/60),s=Math.floor(sec%60); return m+':'+(s<10?'0':'')+s; }
 
   function report(msg) {
-    try { if (window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {}
+    try { if(window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {}
   }
 
   function calcDuration() {
@@ -152,25 +136,35 @@ dbg.textContent = 'URL: ' + window.location.href;
     } catch(e) { return 60000; }
   }
 
+  // Load AlphaTex
   function loadScore(text) {
-    alphaTex = text;
     if(!text) return;
     try {
       api.tex(text);
       scoreLoaded = true;
-      // Get score info from the API
       if (api.score) {
         totalDurationMs = calcDuration();
-        document.getElementById('info').textContent = (api.score.title||'无名曲') + ' · ' + bpm + ' BPM';
+        infoEl.textContent = (api.score.title||'无名曲') + ' · ' + bpm + ' BPM';
+      } else {
+        infoEl.textContent = '谱子已渲染';
       }
       statusText.textContent = '就绪';
       report({ type: 'loaded' });
     } catch(e) {
-      console.error('[Player] tex error:', e);
-      document.getElementById('info').textContent = '谱子解析失败: ' + (e.message||'');
+      console.error('tex error:', e);
+      infoEl.textContent = '谱子解析失败: ' + (e.message||'');
     }
   }
 
+  // Auto-load if we have data
+  if (alphaTex) {
+    infoEl.textContent = '谱子已加载 (' + alphaTex.length + ' 字符)，等待渲染...';
+    bpmInput.value = bpm;
+    // Small delay for AlphaTab to initialize
+    setTimeout(function() { loadScore(alphaTex); }, 200);
+  }
+
+  // Animation
   function animate() {
     if(state !== 'running') return;
     var elapsed = (performance.now() - startTime);
@@ -196,7 +190,7 @@ dbg.textContent = 'URL: ' + window.location.href;
 
   function doStart() {
     bpm = parseInt(bpmInput.value) || bpm;
-    if(!scoreLoaded) { loadScore(alphaTex); setTimeout(doStart, 300); return; }
+    if(!scoreLoaded && alphaTex) { loadScore(alphaTex); setTimeout(doStart, 300); return; }
     totalDurationMs = calcDuration();
     state = 'running';
     pausedElapsed = 0;
@@ -260,19 +254,6 @@ dbg.textContent = 'URL: ' + window.location.href;
     this.value = v; bpm = v;
   });
 
-  function initFromHash() {
-    var tex = window.__alphaTex;
-    var bpmVal = window.__bpm;
-    if (tex) {
-      bpm = bpmVal || 100;
-      bpmInput.value = bpm;
-      loadScore(tex);
-    } else {
-      document.getElementById('info').textContent = '等待谱子...';
-    }
-  }
-
-  initFromHash();
   report({ type: 'ready' });
   console.log('[Player] initialized');
 })();
