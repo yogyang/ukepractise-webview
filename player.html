@@ -140,13 +140,21 @@
   function loadScore(text) {
     if(!text) return;
     try {
-      api.tex(text);
+      // Listen for render errors
+      var onRenderError = function(e) {
+        console.error('[AlphaTab] Render error:', e);
+        infoEl.textContent = '渲染错误: ' + (e.message||e);
+      };
+      api.render.result.on(function(r) {});
+      var result = api.tex(text);
       scoreLoaded = true;
       if (api.score) {
         totalDurationMs = calcDuration();
-        infoEl.textContent = (api.score.title||'无名曲') + ' · ' + bpm + ' BPM';
+        var title = api.score.title || '无名曲';
+        infoEl.textContent = title + ' · ' + bpm + ' BPM';
+        console.log('[Player] Score loaded:', title, 'Bars:', api.score.masterBars.length);
       } else {
-        infoEl.textContent = '谱子已渲染';
+        infoEl.textContent = '谱子已渲染 (score=null)';
       }
       statusText.textContent = '就绪';
       report({ type: 'loaded' });
@@ -156,12 +164,18 @@
     }
   }
 
+  // Listen for render events
+  api.renderFinished.on(function() {
+    console.log('[Player] Render completed, score:', api.score ? api.score.title : 'null');
+    infoEl.textContent = (api.score ? (api.score.title||'谱子') : '谱子') + ' · ' + bpm + ' BPM';
+  });
+  var errorUnsub = api.renderFinished.on(function(r) {}); // dummy
+
   // Auto-load if we have data
   if (alphaTex) {
-    infoEl.textContent = '谱子已加载 (' + alphaTex.length + ' 字符)，等待渲染...';
+    infoEl.textContent = '谱子已加载 (' + alphaTex.length + ' 字符)';
     bpmInput.value = bpm;
-    // Small delay for AlphaTab to initialize
-    setTimeout(function() { loadScore(alphaTex); }, 200);
+    setTimeout(function() { loadScore(alphaTex); }, 300);
   }
 
   // Animation
