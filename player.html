@@ -3,48 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Fingerstyle Player</title>
+<title>指弹练习器</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    background:#f5f5f5; color:#333;
+    background:#f6f3ee; color:#24211d;
     font-family:-apple-system, BlinkMacSystemFont, sans-serif;
     overflow:hidden; height:100vh; display:flex; flex-direction:column;
   }
   #alphaTab { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; }
   #alphaTab canvas { display:block; }
-  #info { text-align:center; font-size:12px; color:#999; padding:6px; background:#fafafa; border-bottom:1px solid #eee; }
-  #controls { background:#fafafa; border-top:1px solid #e0e0e0; padding:12px 16px 20px; display:flex; flex-direction:column; gap:10px; }
+  #info { text-align:center; font-size:12px; color:#7a7168; padding:6px; background:#fbf8f3; border-bottom:1px solid #e7e0d8; }
+  #controls { background:#fcfaf7; border-top:1px solid #e7e0d8; padding:12px 16px 20px; display:flex; flex-direction:column; gap:10px; box-shadow:0 -8px 24px rgba(36,33,29,0.06); }
   .row { display:flex; justify-content:space-between; align-items:center; }
   .bpm-group { display:flex; align-items:center; gap:8px; }
-  .bpm-group label { font-size:14px; color:#666; font-weight:600; }
-  .bpm-btn { width:36px; height:36px; border-radius:8px; border:1px solid #ccc; background:#fff; color:#555; font-size:20px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; user-select:none; }
-  .bpm-btn:active { background:#f0f0f0; }
-  .bpm-input { width:60px; height:36px; text-align:center; font-size:18px; font-weight:700; color:#333; background:#fff; border:1px solid #ccc; border-radius:8px; outline:none; }
+  .bpm-group label { font-size:14px; color:#7a7168; font-weight:600; }
+  .bpm-btn { width:36px; height:36px; border-radius:8px; border:1px solid #d8d0c7; background:#fff; color:#176b87; font-size:20px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; user-select:none; }
+  .bpm-btn:active { background:#fbf8f3; }
+  .bpm-input { width:60px; height:36px; text-align:center; font-size:18px; font-weight:700; color:#24211d; background:#fff; border:1px solid #d8d0c7; border-radius:8px; outline:none; }
   .status-area { display:flex; align-items:center; gap:8px; }
-  .status-dot { width:10px; height:10px; border-radius:50%; background:#ccc; transition:background 0.3s; }
-  .status-dot.active { background:#e74c3c; box-shadow:0 0 6px #e74c3c; animation:pulse 1s infinite; }
+  .status-dot { width:10px; height:10px; border-radius:50%; background:#b0a79e; transition:background 0.3s; }
+  .status-dot.active { background:#d95f42; box-shadow:0 0 8px rgba(217,95,66,0.45); animation:pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-  .status-text { font-size:13px; color:#999; }
-  .timer { font-size:18px; font-weight:700; color:#555; font-variant-numeric:tabular-nums; }
+  .status-text { font-size:13px; color:#7a7168; }
+  .timer { font-size:18px; font-weight:700; color:#24211d; font-variant-numeric:tabular-nums; }
   .action-row { display:flex; gap:10px; }
   .action-btn { flex:1; height:48px; border-radius:12px; border:none; font-size:16px; font-weight:600; cursor:pointer; transition:background 0.2s; -webkit-tap-highlight-color:transparent; user-select:none; }
   .action-btn.practice { background:#d98b42; color:#fff; }
   .action-btn.practice:active { background:#bf7330; }
   .action-btn.practice.recording { background:#e74c3c; }
   .action-btn.practice.recording:active { background:#c0392b; }
-  .action-btn.preview { background:#4a90d9; color:#fff; }
-  .action-btn.preview:active { background:#357abd; }
-  .action-btn.preview.playing { background:#e74c3c; }
-  .action-btn.secondary { background:#f0f0f0; color:#666; border:1px solid #ddd; }
-  .action-btn.secondary:active { background:#e0e0e0; }
+  .action-btn.preview { background:#176b87; color:#fff; }
+  .action-btn.preview:active { background:#11556b; }
+  .action-btn.preview.playing { background:#d95f42; }
+  .action-btn.secondary { background:#fff; color:#176b87; border:1px solid #d8d0c7; }
+  .action-btn.secondary:active { background:#fbf8f3; }
   .action-btn:disabled { opacity:0.4; }
+  .fallback-score {
+    display:none; min-height:100%; padding:18px 16px 96px;
+    color:#24211d; background:#fff; font:14px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space:pre-wrap; word-break:break-word;
+  }
+  .fallback-score.show { display:block; }
   .hidden { display:none !important; }
 </style>
 </head>
 <body>
 <div id="info">加载中...</div>
-<div id="alphaTab"></div>
+<div id="alphaTab"><pre class="fallback-score" id="fallbackScore"></pre></div>
 <div id="controls">
   <div class="row">
     <div class="bpm-group">
@@ -75,7 +81,9 @@
   var d = params.get('d');
   if (d) {
     try {
-      var data = JSON.parse(decodeURIComponent(d));
+      var data;
+      try { data = JSON.parse(d); }
+      catch(parseErr) { data = JSON.parse(decodeURIComponent(d)); }
       alphaTex = data.alphaTex || '';
       bpm = data.bpm || 100;
     } catch(e) { document.getElementById('info').textContent = '数据解析失败'; }
@@ -84,7 +92,12 @@
   var api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
     core: { fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/font/' },
     display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
-    player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
+    player: {
+      enablePlayer: true,
+      enableCursor: true,
+      enableUserInteraction: false,
+      soundFont: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/soundfont/sonivox.sf2'
+    }
   });
 
   // --- State ---
@@ -103,9 +116,21 @@
   var statusDot = document.getElementById('statusDot');
   var timerEl = document.getElementById('timer');
   var infoEl = document.getElementById('info');
+  var fallbackScore = document.getElementById('fallbackScore');
 
   function fmt(sec) { var m=Math.floor(sec/60),s=Math.floor(sec%60); return m+':'+(s<10?'0':'')+s; }
   function report(msg) { try { if(window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {} }
+  function getScoreTitle() { return api.score && api.score.title ? api.score.title : '无名曲'; }
+  function showRawScore(reason) {
+    fallbackScore.textContent = alphaTex || '没有收到谱子内容';
+    fallbackScore.className = 'fallback-score show';
+    scoreLoaded = !!alphaTex;
+    totalDurationMs = 60000;
+    statusText.textContent = '就绪';
+    btnPreview.disabled = false;
+    infoEl.textContent = reason || '已显示谱子原文';
+    report({ type: 'loaded', fallback: true });
+  }
 
   function calcDuration() {
     try {
@@ -118,21 +143,26 @@
 
   // --- Load AlphaTex ---
   function loadScore(text) {
-    if(!text) return;
+    if(!text) { showRawScore('没有收到谱子内容'); return; }
     try {
-      api.tex(text);
-      scoreLoaded = true;
-      if (api.score) {
-        totalDurationMs = calcDuration();
-        infoEl.textContent = (api.score.title||'无名曲') + ' · ' + bpm + ' BPM';
-        console.log('[Player] Loaded:', api.score.title, 'Bars:', api.score.masterBars.length);
+      fallbackScore.className = 'fallback-score';
+      fallbackScore.textContent = '';
+      if (typeof api.tex === 'function') {
+        api.tex(text);
+      } else if (typeof api.load === 'function') {
+        api.load(text);
+      } else {
+        showRawScore('当前 AlphaTab 不支持文本加载，已显示原文');
+        return;
       }
-      statusText.textContent = '就绪';
-      btnPreview.disabled = false;
-      report({ type: 'loaded' });
+      setTimeout(function() {
+        if (!api.score && !scoreLoaded) {
+          showRawScore('谱子暂未被 AlphaTab 解析，已显示原文');
+        }
+      }, 1600);
     } catch(e) {
       console.error('tex error:', e);
-      infoEl.textContent = '谱子解析失败: ' + (e.message||'');
+      showRawScore('谱子解析失败，已显示原文');
     }
   }
 
@@ -150,7 +180,7 @@
       report({ type: 'state', state: 'finished', bpm: bpm });
       return;
     }
-    try { api.setBeatPosition(elapsed); } catch(e) {}
+    try { if (api.score) api.setBeatPosition(elapsed); } catch(e) {}
     animId = requestAnimationFrame(runPracticeAnim);
   }
 
@@ -173,7 +203,7 @@
     statusText.textContent = '已停止'; statusDot.className = 'status-dot';
     btnPractice.textContent = '▶ 开始'; btnPractice.className = 'action-btn practice';
     timerEl.textContent = '0:00';
-    try { api.setBeatPosition(0); } catch(e) {}
+    try { if (api.score) api.setBeatPosition(0); } catch(e) {}
     report({ type: 'state', state: 'stopped', bpm: bpm });
   }
 
@@ -191,6 +221,13 @@
     previewState = 'playing'; pausedElapsed = 0; startTime = performance.now();
     btnPreview.textContent = '■ 停止'; btnPreview.className = 'action-btn preview playing';
     statusText.textContent = '试听中'; statusDot.className = 'status-dot active';
+    try {
+      if (api.score && typeof api.playPause === 'function') api.playPause();
+      else if (api.score && typeof api.play === 'function') api.play();
+    } catch(e) {
+      console.warn('[Player] Preview audio unavailable:', e);
+      infoEl.textContent = '试听音频暂不可用，正在预览进度';
+    }
     animId = requestAnimationFrame(function fn() {
       if (previewState !== 'playing') return;
       var elapsed = (performance.now() - startTime);
@@ -200,18 +237,22 @@
         btnPreview.textContent = '🎵 重播'; btnPreview.className = 'action-btn preview';
         return;
       }
-      try { api.setBeatPosition(elapsed); } catch(e) {}
+      try { if (api.score) api.setBeatPosition(elapsed); } catch(e) {}
       animId = requestAnimationFrame(fn);
     });
   }
 
   function stopPreview() {
     if (animId) { cancelAnimationFrame(animId); animId = null; }
+    try {
+      if (api.score && typeof api.stop === 'function') api.stop();
+      else if (api.score && typeof api.pause === 'function') api.pause();
+    } catch(e) {}
     previewState = 'stopped';
     btnPreview.textContent = '🎵 试听'; btnPreview.className = 'action-btn preview';
     statusText.textContent = '就绪'; statusDot.className = 'status-dot';
     timerEl.textContent = '0:00';
-    try { api.setBeatPosition(0); } catch(e) {}
+    try { if (api.score) api.setBeatPosition(0); } catch(e) {}
   }
 
   btnPreview.addEventListener('click', function() {
@@ -219,28 +260,20 @@
     else stopPreview();
   });
 
-  // Debug score details
-  function showScoreInfo() {
-    var info = 'Score: ' + (api.score ? api.score.title : 'null');
-    if (api.score) {
-      info += ' | Tracks: ' + api.score.tracks.length;
-      info += ' | MasterBars: ' + api.score.masterBars.length;
-      if (api.score.tracks.length > 0) {
-        var track = api.score.tracks[0];
-        info += ' | Staves: ' + track.staves.length;
-        if (track.staves.length > 0) {
-          info += ' | Bars: ' + track.staves[0].bars.length;
-        }
-      }
-    }
-    console.log('[Player]', info);
-    infoEl.textContent = info;
-  }
-
+  api.scoreLoaded.on(function(score) {
+    scoreLoaded = true;
+    totalDurationMs = calcDuration();
+    infoEl.textContent = (score.title || getScoreTitle()) + ' · ' + bpm + ' BPM';
+    statusText.textContent = '就绪';
+    btnPreview.disabled = false;
+    report({ type: 'loaded' });
+  });
   api.renderFinished.on(function() {
     console.log('[Player] Render finished');
-    showScoreInfo();
   });
+  if (api.playerReady) {
+    api.playerReady.on(function() { console.log('[Player] Audio player ready'); });
+  }
 
   // --- Auto-load ---
   if (alphaTex) {
@@ -249,8 +282,6 @@
     btnPreview.disabled = true;
     setTimeout(function() {
       loadScore(alphaTex);
-      // Check score after a delay
-      setTimeout(showScoreInfo, 500);
     }, 200);
   }
 
