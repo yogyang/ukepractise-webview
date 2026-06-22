@@ -11,51 +11,34 @@
     font-family:-apple-system, BlinkMacSystemFont, sans-serif;
     overflow:hidden; height:100vh; display:flex; flex-direction:column;
   }
-  #alphaTab {
-    flex:1; overflow:auto; -webkit-overflow-scrolling:touch;
-    background:#fff;
-  }
+  #alphaTab { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; }
   #alphaTab canvas { display:block; }
-  #info {
-    text-align:center; font-size:12px; color:#999; padding:6px;
-    background:#fafafa; border-bottom:1px solid #eee;
-  }
-  #controls {
-    background:#fafafa; border-top:1px solid #e0e0e0;
-    padding:12px 16px 20px; display:flex; flex-direction:column; gap:10px;
-  }
+  #info { text-align:center; font-size:12px; color:#999; padding:6px; background:#fafafa; border-bottom:1px solid #eee; }
+  #controls { background:#fafafa; border-top:1px solid #e0e0e0; padding:12px 16px 20px; display:flex; flex-direction:column; gap:10px; }
   .row { display:flex; justify-content:space-between; align-items:center; }
   .bpm-group { display:flex; align-items:center; gap:8px; }
   .bpm-group label { font-size:14px; color:#666; font-weight:600; }
-  .bpm-btn {
-    width:36px; height:36px; border-radius:8px; border:1px solid #ccc;
-    background:#fff; color:#555; font-size:20px; font-weight:600;
-    cursor:pointer; display:flex; align-items:center; justify-content:center;
-    -webkit-tap-highlight-color:transparent; user-select:none;
-  }
+  .bpm-btn { width:36px; height:36px; border-radius:8px; border:1px solid #ccc; background:#fff; color:#555; font-size:20px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; user-select:none; }
   .bpm-btn:active { background:#f0f0f0; }
-  .bpm-input {
-    width:60px; height:36px; text-align:center; font-size:18px; font-weight:700;
-    color:#333; background:#fff; border:1px solid #ccc; border-radius:8px; outline:none;
-  }
+  .bpm-input { width:60px; height:36px; text-align:center; font-size:18px; font-weight:700; color:#333; background:#fff; border:1px solid #ccc; border-radius:8px; outline:none; }
   .status-area { display:flex; align-items:center; gap:8px; }
   .status-dot { width:10px; height:10px; border-radius:50%; background:#ccc; transition:background 0.3s; }
   .status-dot.active { background:#e74c3c; box-shadow:0 0 6px #e74c3c; animation:pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
   .status-text { font-size:13px; color:#999; }
   .timer { font-size:18px; font-weight:700; color:#555; font-variant-numeric:tabular-nums; }
-  .action-row { display:flex; gap:12px; }
-  .action-btn {
-    flex:1; height:48px; border-radius:12px; border:none;
-    font-size:17px; font-weight:600; cursor:pointer;
-    transition:background 0.2s; -webkit-tap-highlight-color:transparent; user-select:none;
-  }
-  .action-btn.primary { background:#d98b42; color:#fff; }
-  .action-btn.primary:active { background:#bf7330; }
-  .action-btn.primary.recording { background:#e74c3c; }
-  .action-btn.primary.recording:active { background:#c0392b; }
+  .action-row { display:flex; gap:10px; }
+  .action-btn { flex:1; height:48px; border-radius:12px; border:none; font-size:16px; font-weight:600; cursor:pointer; transition:background 0.2s; -webkit-tap-highlight-color:transparent; user-select:none; }
+  .action-btn.practice { background:#d98b42; color:#fff; }
+  .action-btn.practice:active { background:#bf7330; }
+  .action-btn.practice.recording { background:#e74c3c; }
+  .action-btn.practice.recording:active { background:#c0392b; }
+  .action-btn.preview { background:#4a90d9; color:#fff; }
+  .action-btn.preview:active { background:#357abd; }
+  .action-btn.preview.playing { background:#e74c3c; }
   .action-btn.secondary { background:#f0f0f0; color:#666; border:1px solid #ddd; }
   .action-btn.secondary:active { background:#e0e0e0; }
+  .action-btn:disabled { opacity:0.4; }
   .hidden { display:none !important; }
 </style>
 </head>
@@ -77,8 +60,8 @@
     <div class="timer" id="timer">0:00</div>
   </div>
   <div class="action-row">
-    <button class="action-btn primary" id="btnStart">▶ 开始</button>
-    <button class="action-btn secondary hidden" id="btnPause">❚❚ 暂停</button>
+    <button class="action-btn practice" id="btnPractice">▶ 开始</button>
+    <button class="action-btn preview" id="btnPreview">🎵 试听</button>
   </div>
 </div>
 <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
@@ -95,37 +78,34 @@
       var data = JSON.parse(decodeURIComponent(d));
       alphaTex = data.alphaTex || '';
       bpm = data.bpm || 100;
-    } catch(e) {
-      document.getElementById('info').textContent = '数据解析失败';
-    }
+    } catch(e) { document.getElementById('info').textContent = '数据解析失败'; }
   }
 
   var api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
     core: { fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/font/' },
     display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
-    player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
+    player: { enablePlayer: true, enableCursor: true, enableUserInteraction: false, soundFont: null }
   });
 
-  var state = 'idle';
+  // --- State ---
+  var practiceState = 'idle'; // idle | running | paused | finished
+  var previewState = 'stopped'; // stopped | playing
+  var scoreLoaded = false;
+  var totalDurationMs = 0;
   var animId = null;
   var startTime = 0;
   var pausedElapsed = 0;
-  var totalDurationMs = 0;
-  var scoreLoaded = false;
 
   var bpmInput = document.getElementById('bpmInput');
-  var btnStart = document.getElementById('btnStart');
-  var btnPause = document.getElementById('btnPause');
+  var btnPractice = document.getElementById('btnPractice');
+  var btnPreview = document.getElementById('btnPreview');
   var statusText = document.getElementById('statusText');
   var statusDot = document.getElementById('statusDot');
   var timerEl = document.getElementById('timer');
   var infoEl = document.getElementById('info');
 
   function fmt(sec) { var m=Math.floor(sec/60),s=Math.floor(sec%60); return m+':'+(s<10?'0':'')+s; }
-
-  function report(msg) {
-    try { if(window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {}
-  }
+  function report(msg) { try { if(window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {} }
 
   function calcDuration() {
     try {
@@ -136,27 +116,19 @@
     } catch(e) { return 60000; }
   }
 
-  // Load AlphaTex
+  // --- Load AlphaTex ---
   function loadScore(text) {
     if(!text) return;
     try {
-      // Listen for render errors
-      var onRenderError = function(e) {
-        console.error('[AlphaTab] Render error:', e);
-        infoEl.textContent = '渲染错误: ' + (e.message||e);
-      };
-      api.render.result.on(function(r) {});
-      var result = api.tex(text);
+      api.tex(text);
       scoreLoaded = true;
       if (api.score) {
         totalDurationMs = calcDuration();
-        var title = api.score.title || '无名曲';
-        infoEl.textContent = title + ' · ' + bpm + ' BPM';
-        console.log('[Player] Score loaded:', title, 'Bars:', api.score.masterBars.length);
-      } else {
-        infoEl.textContent = '谱子已渲染 (score=null)';
+        infoEl.textContent = (api.score.title||'无名曲') + ' · ' + bpm + ' BPM';
+        console.log('[Player] Loaded:', api.score.title, 'Bars:', api.score.masterBars.length);
       }
       statusText.textContent = '就绪';
+      btnPreview.disabled = false;
       report({ type: 'loaded' });
     } catch(e) {
       console.error('tex error:', e);
@@ -164,97 +136,104 @@
     }
   }
 
-  // Listen for render events
-  api.renderFinished.on(function() {
-    console.log('[Player] Render completed, score:', api.score ? api.score.title : 'null');
-    infoEl.textContent = (api.score ? (api.score.title||'谱子') : '谱子') + ' · ' + bpm + ' BPM';
-  });
-  var errorUnsub = api.renderFinished.on(function(r) {}); // dummy
-
-  // Auto-load if we have data
-  if (alphaTex) {
-    infoEl.textContent = '谱子已加载 (' + alphaTex.length + ' 字符)';
-    bpmInput.value = bpm;
-    setTimeout(function() { loadScore(alphaTex); }, 300);
-  }
-
-  // Animation
-  function animate() {
-    if(state !== 'running') return;
+  // ============ PRACTICE MODE (auto-scroll + recording) ============
+  function runPracticeAnim() {
+    if(practiceState !== 'running') return;
     var elapsed = (performance.now() - startTime);
     timerEl.textContent = fmt(elapsed/1000);
     if(elapsed >= totalDurationMs && totalDurationMs > 0) {
-      cancelAnimationFrame(animId); animId = null;
-      state = 'finished';
+      stopPractice();
+      practiceState = 'finished';
+      btnPractice.textContent = '▶ 重复';
       statusText.textContent = '播放结束';
       statusDot.className = 'status-dot';
-      btnStart.textContent = '▶ 重复';
-      btnStart.className = 'action-btn primary';
-      togglePauseBtn(false);
       report({ type: 'state', state: 'finished', bpm: bpm });
       return;
     }
     try { api.setBeatPosition(elapsed); } catch(e) {}
-    animId = requestAnimationFrame(animate);
+    animId = requestAnimationFrame(runPracticeAnim);
   }
 
-  function togglePauseBtn(show) {
-    btnPause.className = 'action-btn secondary' + (show ? '' : ' hidden');
-  }
-
-  function doStart() {
+  function startPractice() {
     bpm = parseInt(bpmInput.value) || bpm;
-    if(!scoreLoaded && alphaTex) { loadScore(alphaTex); setTimeout(doStart, 300); return; }
+    if(!scoreLoaded && alphaTex) { loadScore(alphaTex); setTimeout(startPractice, 300); return; }
+    // Stop preview if playing
+    if (previewState === 'playing') { api.stop(); previewState = 'stopped'; btnPreview.textContent = '🎵 试听'; }
     totalDurationMs = calcDuration();
-    state = 'running';
-    pausedElapsed = 0;
-    startTime = performance.now();
-    statusText.textContent = '演奏中';
-    statusDot.className = 'status-dot active';
-    btnStart.textContent = '■ 停止';
-    btnStart.className = 'action-btn primary recording';
-    togglePauseBtn(true);
-    btnPause.textContent = '❚❚ 暂停';
+    practiceState = 'running'; pausedElapsed = 0; startTime = performance.now();
+    statusText.textContent = '演奏中'; statusDot.className = 'status-dot active';
+    btnPractice.textContent = '■ 停止'; btnPractice.className = 'action-btn practice recording';
     report({ type: 'state', state: 'running', bpm: bpm });
-    animId = requestAnimationFrame(animate);
+    animId = requestAnimationFrame(runPracticeAnim);
   }
 
-  function doStop() {
-    cancelAnimationFrame(animId); animId = null;
-    state = 'idle';
-    statusText.textContent = '已停止';
-    statusDot.className = 'status-dot';
-    btnStart.textContent = '▶ 开始';
-    btnStart.className = 'action-btn primary';
-    togglePauseBtn(false);
+  function stopPractice() {
+    if (animId) { cancelAnimationFrame(animId); animId = null; }
+    practiceState = 'idle';
+    statusText.textContent = '已停止'; statusDot.className = 'status-dot';
+    btnPractice.textContent = '▶ 开始'; btnPractice.className = 'action-btn practice';
     timerEl.textContent = '0:00';
     try { api.setBeatPosition(0); } catch(e) {}
     report({ type: 'state', state: 'stopped', bpm: bpm });
   }
 
-  btnStart.addEventListener('click', function() {
-    if(state === 'idle' || state === 'finished') doStart();
-    else if(state === 'running' || state === 'paused') doStop();
+  btnPractice.addEventListener('click', function() {
+    if (practiceState === 'idle' || practiceState === 'finished') startPractice();
+    else stopPractice();
   });
 
-  btnPause.addEventListener('click', function() {
-    if(state === 'running') {
-      cancelAnimationFrame(animId); animId = null;
-      pausedElapsed = performance.now() - startTime;
-      state = 'paused';
-      statusText.textContent = '已暂停';
-      btnPause.textContent = '▶ 继续';
-      report({ type: 'state', state: 'paused', bpm: bpm });
-    } else if(state === 'paused') {
-      state = 'running';
-      startTime = performance.now() - pausedElapsed;
-      statusText.textContent = '演奏中';
-      btnPause.textContent = '❚❚ 暂停';
-      report({ type: 'state', state: 'running', bpm: bpm });
-      animId = requestAnimationFrame(animate);
+  // ============ PREVIEW MODE (MIDI playback) ============
+  function startPreview() {
+    bpm = parseInt(bpmInput.value) || bpm;
+    if (!scoreLoaded && alphaTex) { loadScore(alphaTex); setTimeout(startPreview, 300); return; }
+    // Stop practice mode if running
+    if (practiceState === 'running') stopPractice();
+    previewState = 'playing';
+    btnPreview.textContent = '■ 停止'; btnPreview.className = 'action-btn preview playing';
+    statusText.textContent = '试听中'; statusDot.className = 'status-dot active';
+    api.play();
+  }
+
+  function stopPreview() {
+    api.stop();
+    previewState = 'stopped';
+    btnPreview.textContent = '🎵 试听'; btnPreview.className = 'action-btn preview';
+    statusText.textContent = '就绪'; statusDot.className = 'status-dot';
+    timerEl.textContent = '0:00';
+  }
+
+  btnPreview.addEventListener('click', function() {
+    if (previewState === 'stopped') startPreview();
+    else stopPreview();
+  });
+
+  // Listen for player state changes (preview finished)
+  api.playerStateChanged.on(function(e) {
+    if (e.state === 0) { // stopped
+      if (previewState === 'playing') {
+        previewState = 'stopped';
+        btnPreview.textContent = '🎵 试听'; btnPreview.className = 'action-btn preview';
+        statusText.textContent = '就绪'; statusDot.className = 'status-dot';
+        timerEl.textContent = '0:00';
+      }
     }
   });
 
+  api.positionChanged.on(function(e) {
+    if (previewState === 'playing') {
+      timerEl.textContent = fmt(e.currentTime / 1000);
+    }
+  });
+
+  // --- Auto-load ---
+  if (alphaTex) {
+    infoEl.textContent = '谱子已加载 (' + alphaTex.length + ' 字符)';
+    bpmInput.value = bpm;
+    btnPreview.disabled = true;
+    setTimeout(function() { loadScore(alphaTex); }, 200);
+  }
+
+  // --- BPM controls ---
   document.getElementById('bpmDown').addEventListener('click', function() {
     var v = parseInt(bpmInput.value)||100; v = Math.max(20, v-5);
     bpmInput.value = v; bpm = v;

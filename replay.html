@@ -6,34 +6,17 @@
 <title>Session Replay</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    background:#f5f5f5; color:#333;
-    font-family:-apple-system, BlinkMacSystemFont, sans-serif;
-    overflow:hidden; height:100vh; display:flex; flex-direction:column;
-  }
-  #alphaTab {
-    flex:1; overflow:auto; -webkit-overflow-scrolling:touch;
-    background:#fff;
-  }
+  body { background:#f5f5f5; color:#333; font-family:-apple-system, BlinkMacSystemFont, sans-serif; overflow:hidden; height:100vh; display:flex; flex-direction:column; }
+  #alphaTab { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; }
   #alphaTab canvas { display:block; }
-  #info {
-    text-align:center; font-size:12px; color:#999; padding:6px;
-    background:#fafafa; border-bottom:1px solid #eee;
-  }
-  #controls {
-    background:#fafafa; border-top:1px solid #e0e0e0;
-    padding:12px 20px 24px; display:flex; flex-direction:column; gap:10px;
-  }
+  #info { text-align:center; font-size:12px; color:#999; padding:6px; background:#fafafa; border-bottom:1px solid #eee; }
+  #controls { background:#fafafa; border-top:1px solid #e0e0e0; padding:12px 20px 24px; display:flex; flex-direction:column; gap:10px; }
   .progress-area { display:flex; align-items:center; gap:12px; }
   .time { font-size:13px; color:#999; font-variant-numeric:tabular-nums; min-width:40px; }
   .track { flex:1; height:4px; background:#e0e0e0; border-radius:2px; position:relative; cursor:pointer; }
   .fill { height:100%; background:#d98b42; border-radius:2px; width:0%; }
   .action-row { display:flex; justify-content:center; align-items:center; gap:20px; }
-  .btn {
-    width:56px; height:56px; border-radius:50%; border:none; font-size:24px;
-    cursor:pointer; display:flex; align-items:center; justify-content:center;
-    -webkit-tap-highlight-color:transparent; user-select:none;
-  }
+  .btn { width:56px; height:56px; border-radius:50%; border:none; font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; user-select:none; }
   .btn-primary { background:#d98b42; color:#fff; font-size:28px; }
   .btn-primary:active { background:#bf7330; }
   .btn-secondary { background:#f0f0f0; color:#666; border:1px solid #ddd; font-size:20px; }
@@ -63,8 +46,23 @@
   var api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
     core: { fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/font/' },
     display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
-    player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
+    player: { enablePlayer: true, enableCursor: true, enableUserInteraction: false, soundFont: null }
   });
+
+  // Read data from query param
+  var params = new URLSearchParams(window.location.search);
+  var d = params.get('d');
+  var alphaTex = '';
+  var bpm = 100;
+  var audioPath = '';
+  if (d) {
+    try {
+      var data = JSON.parse(decodeURIComponent(d));
+      alphaTex = data.alphaTex || '';
+      bpm = data.bpm || 100;
+      audioPath = data.audioPath || '';
+    } catch(e) { document.getElementById('info').textContent = '数据解析失败'; }
+  }
 
   var audio = document.getElementById('audioPlayer');
   var btnPlay = document.getElementById('btnPlay');
@@ -75,37 +73,22 @@
   var track = document.getElementById('track');
   var infoEl = document.getElementById('info');
 
-  var bpm = 100;
+  var state = 'idle'; // idle | playing | paused
   var animId = null;
 
-  function fmt(sec) {
-    var m = Math.floor(sec/60), s = Math.floor(sec%60);
-    return m + ':' + (s<10?'0':'') + s;
-  }
-
-  function report(msg) {
-    try { if(window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {}
-  }
+  function fmt(sec) { var m=Math.floor(sec/60),s=Math.floor(sec%60); return m+':'+(s<10?'0':'')+s; }
+  function report(msg) { try { if(window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {} }
 
   function loadScore(text) {
     if(!text) return;
     try {
       api.tex(text);
-      if (api.score) {
-        infoEl.textContent = (api.score.title||'无名曲') + ' · ' + bpm + ' BPM';
-      }
+      if (api.score) infoEl.textContent = (api.score.title||'无名曲') + ' · ' + bpm + ' BPM';
       report({ type: 'loaded' });
-    } catch(e) {
-      console.error('[Replay] tex error:', e);
-      infoEl.textContent = '谱子解析失败'; }
+    } catch(e) { console.error('tex error:', e); infoEl.textContent = '谱子解析失败'; }
   }
 
-  function syncCursor() {
-    if (audio && audio.duration) {
-      var pos = audio.currentTime * 1000;
-      try { api.setBeatPosition(pos); } catch(e) {}
-    }
-  }
+  function syncCursor() { if (audio && audio.duration) { try { api.setBeatPosition(audio.currentTime * 1000); } catch(e) {} } }
 
   function animate() {
     if (!audio.paused) {
@@ -114,59 +97,34 @@
       currentTimeEl.textContent = fmt(ct);
       fill.style.width = Math.min((ct/dur)*100, 100) + '%';
       syncCursor();
-      if (ct >= dur - 0.1) {
-        stopPlayback();
-        return;
-      }
+      if (ct >= dur - 0.1) { stopPlayback(); return; }
     }
     animId = requestAnimationFrame(animate);
   }
 
-  function startAnim() {
-    if (animId) cancelAnimationFrame(animId);
-    animId = requestAnimationFrame(animate);
-  }
-
-  function stopAnim() {
-    if (animId) { cancelAnimationFrame(animId); animId = null; }
-  }
+  function startAnim() { if(animId) cancelAnimationFrame(animId); animId = requestAnimationFrame(animate); }
+  function stopAnim() { if(animId) { cancelAnimationFrame(animId); animId = null; } }
 
   function startPlayback() {
     audio.play().then(function() {
       btnPlay.textContent = '❚❚';
       startAnim();
       report({ type: 'state', state: 'playing' });
-    }).catch(function(e) {
-      console.error('Audio play error:', e);
-      infoEl.textContent = '音频播放失败';
-    });
+    }).catch(function(e) { console.error('Audio error:', e); infoEl.textContent = '音频播放失败'; });
   }
 
-  function pausePlayback() {
-    audio.pause();
-    stopAnim();
-    btnPlay.textContent = '▶';
-    report({ type: 'state', state: 'paused' });
-  }
+  function pausePlayback() { audio.pause(); stopAnim(); btnPlay.textContent = '▶'; report({ type: 'state', state: 'paused' }); }
 
   function stopPlayback() {
-    audio.pause();
-    audio.currentTime = 0;
-    stopAnim();
-    btnPlay.textContent = '▶';
-    currentTimeEl.textContent = '0:00';
-    fill.style.width = '0%';
+    audio.pause(); audio.currentTime = 0; stopAnim();
+    btnPlay.textContent = '▶'; currentTimeEl.textContent = '0:00'; fill.style.width = '0%';
     try { api.setBeatPosition(0); } catch(e) {}
     report({ type: 'state', state: 'stopped' });
   }
 
   btnPlay.addEventListener('click', function() {
-    if (audio.paused) {
-      if (audio.currentTime >= audio.duration - 0.1) audio.currentTime = 0;
-      startPlayback();
-    } else {
-      pausePlayback();
-    }
+    if (audio.paused) { if(audio.currentTime >= audio.duration-0.1) audio.currentTime = 0; startPlayback(); }
+    else { pausePlayback(); }
   });
 
   btnStop.addEventListener('click', stopPlayback);
@@ -186,34 +144,16 @@
     infoEl.textContent = infoEl.textContent + ' | 音频已加载';
   });
 
-  audio.addEventListener('error', function() {
-    infoEl.textContent = '音频加载失败，仅谱子回放';
-  });
-
-  function initFromHash() {
-    try {
-      var hash = window.location.hash;
-      if (hash && hash.length > 1) {
-        var decoded = decodeURIComponent(hash.substring(1));
-        var data = JSON.parse(decoded);
-        if (data.alphaTex) {
-          bpm = data.bpm || 100;
-          loadScore(data.alphaTex);
-        }
-        if (data.audioPath) {
-          audio.src = data.audioPath;
-          audio.load();
-        }
-      } else {
-        infoEl.textContent = '等待数据...';
-      }
-    } catch(e) {
-      console.error('[Replay] Hash error:', e);
-      infoEl.textContent = '数据解析失败';
-    }
+  // Auto-load
+  if (alphaTex) {
+    infoEl.textContent = '谱子已加载 (' + alphaTex.length + ' 字符)';
+    setTimeout(function() { loadScore(alphaTex); }, 200);
+  }
+  if (audioPath) {
+    audio.src = audioPath;
+    audio.load();
   }
 
-  initFromHash();
   report({ type: 'ready' });
   console.log('[Replay] initialized');
 })();
