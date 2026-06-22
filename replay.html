@@ -7,31 +7,37 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    background:#0f0f23; color:#e0e0e0;
+    background:#f5f5f5; color:#333;
     font-family:-apple-system, BlinkMacSystemFont, sans-serif;
     overflow:hidden; height:100vh; display:flex; flex-direction:column;
   }
-  #alphaTab { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; background:#1a1a2e; }
+  #alphaTab {
+    flex:1; overflow:auto; -webkit-overflow-scrolling:touch;
+    background:#fff;
+  }
   #alphaTab canvas { display:block; }
-  #info { text-align:center; font-size:12px; color:#666; padding:6px; background:#0f0f23; }
+  #info {
+    text-align:center; font-size:12px; color:#999; padding:6px;
+    background:#fafafa; border-bottom:1px solid #eee;
+  }
   #controls {
-    background:#16213e; border-top:1px solid #0f3460;
+    background:#fafafa; border-top:1px solid #e0e0e0;
     padding:12px 20px 24px; display:flex; flex-direction:column; gap:10px;
   }
   .progress-area { display:flex; align-items:center; gap:12px; }
-  .time { font-size:13px; color:#888; font-variant-numeric:tabular-nums; min-width:40px; }
-  .track { flex:1; height:4px; background:#0f3460; border-radius:2px; position:relative; cursor:pointer; }
-  .fill { height:100%; background:#1a5276; border-radius:2px; width:0%; }
+  .time { font-size:13px; color:#999; font-variant-numeric:tabular-nums; min-width:40px; }
+  .track { flex:1; height:4px; background:#e0e0e0; border-radius:2px; position:relative; cursor:pointer; }
+  .fill { height:100%; background:#d98b42; border-radius:2px; width:0%; }
   .action-row { display:flex; justify-content:center; align-items:center; gap:20px; }
   .btn {
     width:56px; height:56px; border-radius:50%; border:none; font-size:24px;
     cursor:pointer; display:flex; align-items:center; justify-content:center;
     -webkit-tap-highlight-color:transparent; user-select:none;
   }
-  .btn-primary { background:linear-gradient(135deg,#0f3460,#1a5276); color:#fff; font-size:28px; }
-  .btn-primary:active { background:linear-gradient(135deg,#1a5276,#0f3460); }
-  .btn-secondary { background:#1a1a2e; color:#888; border:1px solid #0f3460; font-size:20px; }
-  .btn-secondary:active { background:#2a2a3e; }
+  .btn-primary { background:#d98b42; color:#fff; font-size:28px; }
+  .btn-primary:active { background:#bf7330; }
+  .btn-secondary { background:#f0f0f0; color:#666; border:1px solid #ddd; font-size:20px; }
+  .btn-secondary:active { background:#e0e0e0; }
 </style>
 </head>
 <body>
@@ -98,10 +104,9 @@
     } catch(e) { infoEl.textContent = '谱子解析失败'; }
   }
 
-  // Sync cursor with audio position
   function syncCursor() {
     if (audio && audio.duration) {
-      var pos = audio.currentTime * 1000; // ms
+      var pos = audio.currentTime * 1000;
       try { api.setBeatPosition(pos); } catch(e) {}
     }
   }
@@ -137,7 +142,7 @@
       report({ type: 'state', state: 'playing' });
     }).catch(function(e) {
       console.error('Audio play error:', e);
-      infoEl.textContent = '音频播放失败: ' + e.message;
+      infoEl.textContent = '音频播放失败';
     });
   }
 
@@ -186,11 +191,9 @@
   });
 
   audio.addEventListener('error', function() {
-    infoEl.textContent = '音频加载失败，尝试纯谱子滚动';
-    // Still allow manual cursor movement
+    infoEl.textContent = '音频加载失败，仅谱子回放';
   });
 
-  // Init from URL hash
   function initFromHash() {
     try {
       var hash = window.location.hash;
@@ -204,9 +207,6 @@
         if (data.audioPath) {
           audio.src = data.audioPath;
           audio.load();
-        }
-        if (!data.alphaTex && !data.audioPath) {
-          infoEl.textContent = '没有数据';
         }
       } else {
         infoEl.textContent = '等待数据...';

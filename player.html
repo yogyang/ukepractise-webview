@@ -7,49 +7,55 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    background:#0f0f23; color:#e0e0e0;
+    background:#f5f5f5; color:#333;
     font-family:-apple-system, BlinkMacSystemFont, sans-serif;
     overflow:hidden; height:100vh; display:flex; flex-direction:column;
   }
-  #alphaTab { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; background:#1a1a2e; }
+  #alphaTab {
+    flex:1; overflow:auto; -webkit-overflow-scrolling:touch;
+    background:#fff;
+  }
   #alphaTab canvas { display:block; }
-  #info { text-align:center; font-size:12px; color:#666; padding:6px; background:#0f0f23; }
+  #info {
+    text-align:center; font-size:12px; color:#999; padding:6px;
+    background:#fafafa; border-bottom:1px solid #eee;
+  }
   #controls {
-    background:#16213e; border-top:1px solid #0f3460;
+    background:#fafafa; border-top:1px solid #e0e0e0;
     padding:12px 16px 20px; display:flex; flex-direction:column; gap:10px;
   }
   .row { display:flex; justify-content:space-between; align-items:center; }
   .bpm-group { display:flex; align-items:center; gap:8px; }
-  .bpm-group label { font-size:14px; color:#aaa; font-weight:600; }
+  .bpm-group label { font-size:14px; color:#666; font-weight:600; }
   .bpm-btn {
-    width:36px; height:36px; border-radius:50%; border:1px solid #0f3460;
-    background:#1a1a2e; color:#e0e0e0; font-size:20px; font-weight:600;
+    width:36px; height:36px; border-radius:8px; border:1px solid #ccc;
+    background:#fff; color:#555; font-size:20px; font-weight:600;
     cursor:pointer; display:flex; align-items:center; justify-content:center;
     -webkit-tap-highlight-color:transparent; user-select:none;
   }
-  .bpm-btn:active { background:#0f3460; }
+  .bpm-btn:active { background:#f0f0f0; }
   .bpm-input {
     width:60px; height:36px; text-align:center; font-size:18px; font-weight:700;
-    color:#e0e0e0; background:#0f0f23; border:1px solid #0f3460; border-radius:8px; outline:none;
+    color:#333; background:#fff; border:1px solid #ccc; border-radius:8px; outline:none;
   }
   .status-area { display:flex; align-items:center; gap:8px; }
-  .status-dot { width:10px; height:10px; border-radius:50%; background:#555; transition:background 0.3s; }
-  .status-dot.active { background:#ff4444; box-shadow:0 0 6px #ff4444; animation:pulse 1s infinite; }
+  .status-dot { width:10px; height:10px; border-radius:50%; background:#ccc; transition:background 0.3s; }
+  .status-dot.active { background:#e74c3c; box-shadow:0 0 6px #e74c3c; animation:pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-  .status-text { font-size:13px; color:#888; }
-  .timer { font-size:18px; font-weight:700; color:#e0e0e0; font-variant-numeric:tabular-nums; }
+  .status-text { font-size:13px; color:#999; }
+  .timer { font-size:18px; font-weight:700; color:#555; font-variant-numeric:tabular-nums; }
   .action-row { display:flex; gap:12px; }
   .action-btn {
     flex:1; height:48px; border-radius:12px; border:none;
     font-size:17px; font-weight:600; cursor:pointer;
     transition:background 0.2s; -webkit-tap-highlight-color:transparent; user-select:none;
   }
-  .action-btn.primary { background:linear-gradient(135deg,#0f3460,#1a5276); color:#fff; }
-  .action-btn.primary:active { background:linear-gradient(135deg,#1a5276,#0f3460); }
-  .action-btn.primary.recording { background:linear-gradient(135deg,#8b0000,#cc0000); }
-  .action-btn.primary.recording:active { background:linear-gradient(135deg,#cc0000,#8b0000); }
-  .action-btn.secondary { background:#1a1a2e; color:#aaa; border:1px solid #0f3460; }
-  .action-btn.secondary:active { background:#2a2a3e; }
+  .action-btn.primary { background:#d98b42; color:#fff; }
+  .action-btn.primary:active { background:#bf7330; }
+  .action-btn.primary.recording { background:#e74c3c; }
+  .action-btn.primary.recording:active { background:#c0392b; }
+  .action-btn.secondary { background:#f0f0f0; color:#666; border:1px solid #ddd; }
+  .action-btn.secondary:active { background:#e0e0e0; }
   .hidden { display:none !important; }
 </style>
 </head>
@@ -85,8 +91,7 @@
     player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
   });
 
-  // State
-  var state = 'idle'; // idle | running | paused | finished
+  var state = 'idle';
   var bpm = 100;
   var alphaTex = '';
   var animId = null;
@@ -95,7 +100,6 @@
   var totalDurationMs = 0;
   var scoreLoaded = false;
 
-  // DOM refs
   var bpmInput = document.getElementById('bpmInput');
   var btnStart = document.getElementById('btnStart');
   var btnPause = document.getElementById('btnPause');
@@ -233,7 +237,6 @@
     this.value = v; bpm = v;
   });
 
-  // Check URL hash for initial AlphaTex data
   function initFromHash() {
     try {
       var hash = window.location.hash;
