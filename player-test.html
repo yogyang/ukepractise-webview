@@ -2,29 +2,98 @@
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Test Player</title>
+<style>
+body{background:#fff;padding:20px;font-family:monospace;font-size:14px;line-height:1.6;color:#333;}
+pre{background:#f5f5f5;padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-all;border:1px solid #ddd;}
+button{margin:4px;padding:8px 16px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;}
+input{width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-family:monospace;margin:4px 0;box-sizing:border-box;}
+</style>
 </head>
-<body style="background:#fff;padding:20px;font-family:system-ui;">
-<div id="info">加载中...</div>
+<body>
+<h2>⚙️ 调试信息</h2>
+<div id="status" style="padding:8px;background:#e3f2fd;border-radius:6px;">加载中...</div>
+
+<h3>当前 URL</h3>
+<pre id="urlDisplay"></pre>
+
+<h3>解析结果</h3>
+<pre id="resultDisplay">等待解析...</pre>
+
+<h3>手动输入谱子</h3>
+<p>如果自动加载失败，可以粘贴 AlphaTex 内容在这里：</p>
+<textarea id="manualInput" rows="6" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-family:monospace;box-sizing:border-box;"></textarea>
+<button id="loadBtn">加载谱子</button>
+
 <script>
-var info = document.getElementById('info');
-info.textContent = 'JS 运行正常 ✅';
+var statusEl = document.getElementById('status');
+var urlEl = document.getElementById('urlDisplay');
+var resultEl = document.getElementById('resultDisplay');
+var manualInput = document.getElementById('manualInput');
+
+urlEl.textContent = window.location.href;
 
 // Try to read from query param 'd'
 var params = new URLSearchParams(window.location.search);
 var encoded = params.get('d');
+var alphaTex = '';
+var bpm = 100;
 
 if (encoded) {
+  resultEl.textContent += '找到参数 d, 长度: ' + encoded.length + '\n';
   try {
     // Try base64 decode
-    var decoded = decodeURIComponent(escape(atob(encoded)));
-    var data = JSON.parse(decoded);
-    info.textContent = '数据解析成功 ✅ ' + data.alphaTex.length + ' chars, BPM: ' + data.bpm;
+    var raw = atob(encoded);
+    resultEl.textContent += 'Base64 解码成功, 长度: ' + raw.length + '\n';
+    try {
+      var jsonStr = decodeURIComponent(escape(raw));
+      resultEl.textContent += 'URI 解码成功\n';
+      var data = JSON.parse(jsonStr);
+      alphaTex = data.alphaTex || '';
+      bpm = data.bpm || 100;
+      statusEl.textContent = '✅ 数据解析成功! 谱子 ' + alphaTex.length + ' 字符, BPM: ' + bpm;
+      statusEl.style.background = '#c8e6c9';
+      resultEl.textContent += '✅ JSON 解析成功\n';
+      resultEl.textContent += 'alphaTex 长度: ' + alphaTex.length + '\n';
+      resultEl.textContent += 'bpm: ' + bpm + '\n\n';
+      resultEl.textContent += '--- 谱子内容 (前200字符) ---\n';
+      resultEl.textContent += alphaTex.substring(0, 200);
+    } catch(e) {
+      statusEl.textContent = '❌ JSON 解析失败: ' + e.message;
+      statusEl.style.background = '#ffcdd2';
+      resultEl.textContent += '❌ ' + e.message + '\n';
+    }
   } catch(e) {
-    info.textContent = '解析失败: ' + e.message;
+    statusEl.textContent = '❌ Base64 解码失败: ' + e.message;
+    statusEl.style.background = '#ffcdd2';
+    resultEl.textContent += '❌ ' + e.message + '\n';
+    // Try direct URI decode
+    try {
+      var jsonStr = decodeURIComponent(encoded);
+      var data = JSON.parse(jsonStr);
+      alphaTex = data.alphaTex || '';
+      bpm = data.bpm || 100;
+      statusEl.textContent = '✅ 直接 URI 解析成功!';
+      statusEl.style.background = '#c8e6c9';
+      resultEl.textContent += '✅ 直接 URI 解码成功\n';
+    } catch(e2) {
+      resultEl.textContent += '❌ 直接解码也失败: ' + e2.message + '\n';
+    }
   }
 } else {
-  info.textContent = '无数据参数, URL: ' + window.location.href;
+  statusEl.textContent = '⚠️ 没有参数 d';
+  statusEl.style.background = '#fff9c4';
+  resultEl.textContent = 'URL query params: ' + window.location.search;
 }
+
+// Manual load button
+document.getElementById('loadBtn').addEventListener('click', function() {
+  var text = manualInput.value.trim();
+  if (text) {
+    statusEl.textContent = '✅ 手动加载谱子 (' + text.length + ' 字符)';
+    statusEl.style.background = '#c8e6c9';
+    resultEl.textContent = text.substring(0, 200);
+  }
+});
 </script>
 </body>
 </html>
