@@ -156,7 +156,9 @@
         return;
       }
       setTimeout(function() {
-        if (!api.score && !scoreLoaded) {
+        if (api.score) {
+          console.log('[Player] Score OK:', api.score.title, 'Tracks:', api.score.tracks.length, 'Bars:', api.score.masterBars.length);
+        } else if (!scoreLoaded) {
           showRawScore('谱子暂未被 AlphaTab 解析，已显示原文');
         }
       }, 1600);
