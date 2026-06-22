@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fingerstyle Player</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f23;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #alphaTab {
+    flex: 1;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #1a1a2e;
+  }
+  #alphaTab canvas { display: block; }
+  /* Bottom controls bar */
+  #controls {
+    background: #16213e;
+    border-top: 1px solid #0f3460;
+    padding: 12px 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bpm-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bpm-group label {
+    font-size: 14px;
+    color: #aaa;
+    font-weight: 600;
+  }
+  .bpm-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid #0f3460;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .bpm-btn:active {
+    background: #0f3460;
+  }
+  .bpm-input {
+    width: 60px;
+    height: 36px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: #e0e0e0;
+    background: #0f0f23;
+    border: 1px solid #0f3460;
+    border-radius: 8px;
+    outline: none;
+  }
+  .status-area {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #555;
+    transition: background 0.3s;
+  }
+  .status-dot.active {
+    background: #ff4444;
+    box-shadow: 0 0 6px #ff4444;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .status-text {
+    font-size: 13px;
+    color: #888;
+  }
+  .timer {
+    font-size: 18px;
+    font-weight: 700;
+    color: #e0e0e0;
+    font-variant-numeric: tabular-nums;
+  }
+  .action-row {
+    display: flex;
+    gap: 12px;
+  }
+  .action-btn {
+    flex: 1;
+    height: 48px;
+    border-radius: 12px;
+    border: none;
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .action-btn.primary {
+    background: linear-gradient(135deg, #0f3460, #1a5276);
+    color: #fff;
+  }
+  .action-btn.primary:active {
+    background: linear-gradient(135deg, #1a5276, #0f3460);
+  }
+  .action-btn.primary.recording {
+    background: linear-gradient(135deg, #8b0000, #cc0000);
+  }
+  .action-btn.primary.recording:active {
+    background: linear-gradient(135deg, #cc0000, #8b0000);
+  }
+  .action-btn.secondary {
+    background: #1a1a2e;
+    color: #aaa;
+    border: 1px solid #0f3460;
+  }
+  .action-btn.secondary:active {
+    background: #2a2a3e;
+  }
+  .action-btn.hidden {
+    display: none;
+  }
+  #scoreInfo {
+    text-align: center;
+    font-size: 12px;
+    color: #666;
+    padding: 4px;
+    background: #0f0f23;
+  }
+</style>
+</head>
+<body>
+
+<div id="scoreInfo">等待加载谱子...</div>
+<div id="alphaTab"></div>
+
+<div id="controls">
+  <div class="control-row">
+    <div class="bpm-group">
+      <label>BPM</label>
+      <button class="bpm-btn" id="bpmDown">−</button>
+      <input class="bpm-input" id="bpmInput" type="number" value="100" />
+      <button class="bpm-btn" id="bpmUp">+</button>
+    </div>
+    <div class="status-area">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">就绪</span>
+    </div>
+    <div class="timer" id="timer">0:00</div>
+  </div>
+  <div class="action-row">
+    <button class="action-btn primary" id="btnStart">▶ 开始</button>
+    <button class="action-btn secondary hidden" id="btnPause">❚❚ 暂停</button>
+  </div>
+</div>
+
+<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.7.4/dist/alphaTab.min.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  // --- DOM refs ---
+  var alphaTabEl = document.getElementById('alphaTab');
+  var bpmInput = document.getElementById('bpmInput');
+  var btnStart = document.getElementById('btnStart');
+  var btnPause = document.getElementById('btnPause');
+  var statusDot = document.getElementById('statusDot');
+  var statusText = document.getElementById('statusText');
+  var timerEl = document.getElementById('timer');
+  var scoreInfo = document.getElementById('scoreInfo');
+
+  // --- AlphaTab setup ---
+  var api = new alphaTab.AlphaTabApi(alphaTabEl, {
+    core: {
+      file: null,
+      fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.7.4/dist/font/'
+    },
+    display: {
+      staveProfile: 'tab',
+      noteLabelMode: 'default',
+      layoutMode: 'page'
+    },
+    player: {
+      enablePlayer: false,
+      enableCursor: true,
+      enableUserInteraction: false,
+      soundFont: null
+    }
+  });
+
+  // --- State ---
+  var state = 'idle';   // idle | running | paused | replay | finished
+  var bpm = 100;
+  var animId = null;
+  var startTime = 0;
+  var pausedElapsed = 0;
+  var totalDurationMs = 0;   // total score duration in ms
+  var scoreLoaded = false;
+  var alphaTex = '';
+  var currentBeat = 0;
+
+  // --- UI update helpers ---
+  function updateStatus(text, recording, paused) {
+    statusText.textContent = text;
+    statusDot.className = 'status-dot' + (recording ? ' active' : '');
+  }
+
+  function updateTimer(seconds) {
+    var m = Math.floor(seconds / 60);
+    var s = Math.floor(seconds % 60);
+    timerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function setBtnStart(label, recording) {
+    btnStart.textContent = label;
+    btnStart.className = 'action-btn primary' + (recording ? ' recording' : '');
+  }
+
+  function togglePauseBtn(show) {
+    btnPause.className = 'action-btn secondary' + (show ? '' : ' hidden');
+  }
+
+  function reportToMini(msg) {
+    try {
+      if (window.wx && wx.miniProgram) {
+        wx.miniProgram.postMessage({ data: msg });
+      } else {
+        // Fallback for non-WeChat debugging
+        window.location.hash = '#' + encodeURIComponent(JSON.stringify(msg));
+      }
+    } catch(e) {}
+  }
+
+  // --- Timer update ---
+  function updateTimerFromElapsed() {
+    if (state === 'running' || state === 'replay') {
+      var elapsed = (performance.now() - startTime) / 1000;
+      updateTimer(elapsed);
+    }
+  }
+
+  // --- Animation loop ---
+  function animate() {
+    if (state !== 'running' && state !== 'replay') return;
+
+    var elapsed = (performance.now() - startTime); // ms
+    updateTimer(elapsed / 1000);
+
+    // Calculate position
+    var beatDuration = (60 / bpm) * 1000; // ms per beat
+    currentBeat = elapsed / beatDuration;
+    var positionMs = currentBeat * beatDuration;
+
+    if (positionMs >= totalDurationMs && totalDurationMs > 0) {
+      // End
+      stopAnimation();
+      state = 'finished';
+      updateStatus('播放结束', false);
+      setBtnStart('▶ 重复', false);
+      togglePauseBtn(false);
+      reportToMini({ type: 'state', state: 'finished' });
+      return;
+    }
+
+    try {
+      api.setBeatPosition(positionMs);
+    } catch(e) {}
+    reportToMini({ type: 'progress', beat: currentBeat });
+
+    animId = requestAnimationFrame(animate);
+  }
+
+  function startAnimation() {
+    if (animId) cancelAnimationFrame(animId);
+    startTime = performance.now() - (pausedElapsed || 0);
+    animId = requestAnimationFrame(animate);
+  }
+
+  function stopAnimation() {
+    if (animId) {
+      cancelAnimationFrame(animId);
+      animId = null;
+    }
+  }
+
+  // --- Calculate total duration ---
+  function calcTotalDuration() {
+    try {
+      var score = api.score;
+      if (!score) return 60000; // default 60s
+      // Estimate from master bars
+      var totalBeats = 0;
+      for (var i = 0; i < score.masterBars.length; i++) {
+        totalBeats += (score.masterBars[i].barBeats ? score.masterBars[i].barBeats.length : 4);
+      }
+      var beatDuration = (60 / bpm) * 1000;
+      return totalBeats * beatDuration;
+    } catch(e) {
+      return 60000;
+    }
+  }
+
+  // --- Load score ---
+  function loadScore(text) {
+    try {
+      api.teardown();
+      api = new alphaTab.AlphaTabApi(alphaTabEl, {
+        core: {
+          file: null,
+          fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.7.4/dist/font/'
+        },
+        display: {
+          staveProfile: 'tab',
+          noteLabelMode: 'default',
+          layoutMode: 'page'
+        },
+        player: {
+          enablePlayer: false,
+          enableCursor: true,
+          enableUserInteraction: false,
+          soundFont: null
+        }
+      });
+
+      api.scoreLoaded.on(function(score) {
+        scoreLoaded = true;
+        totalDurationMs = calcTotalDuration();
+        var title = score.title || '无名曲';
+        scoreInfo.textContent = title + ' · ' + bpm + ' BPM';
+        updateStatus('就绪', false);
+        reportToMini({ type: 'loaded', title: title });
+      });
+
+      api.load(text);
+    } catch(e) {
+      scoreInfo.textContent = '谱子解析失败';
+      console.error('Load error:', e);
+    }
+  }
+
+  // --- Commands ---
+  function handleCmd(cmd) {
+    console.log('[Player] cmd:', JSON.stringify(cmd));
+
+    switch(cmd.cmd) {
+      case 'load':
+        alphaTex = cmd.alphaTex || '';
+        bpm = cmd.bpm || 100;
+        bpmInput.value = bpm;
+        loadScore(alphaTex);
+        state = 'idle';
+        setBtnStart('▶ 开始', false);
+        togglePauseBtn(false);
+        updateTimer(0);
+        updateStatus('加载中...', false);
+        break;
+
+      case 'start':
+        bpm = parseInt(bpmInput.value) || bpm;
+        if (!scoreLoaded) {
+          if (alphaTex) loadScore(alphaTex);
+          setTimeout(function() { handleCmd(cmd); }, 300);
+          return;
+        }
+        totalDurationMs = calcTotalDuration();
+        state = 'running';
+        pausedElapsed = 0;
+        updateStatus('演奏中', true);
+        setBtnStart('■ 停止', true);
+        togglePauseBtn(true);
+        btnPause.textContent = '❚❚ 暂停';
+        startAnimation();
+        reportToMini({ type: 'state', state: 'running' });
+        break;
+
+      case 'stop':
+        stopAnimation();
+        state = 'idle';
+        updateStatus('已停止', false);
+        setBtnStart('▶ 开始', false);
+        togglePauseBtn(false);
+        updateTimer(0);
+        // Reset cursor to beginning
+        try { api.setBeatPosition(0); } catch(e) {}
+        reportToMini({ type: 'state', state: 'stopped' });
+        break;
+
+      case 'pause':
+        if (state === 'running' || state === 'replay') {
+          pausedElapsed = performance.now() - startTime;
+          state = 'paused';
+          stopAnimation();
+          updateStatus('已暂停', false);
+          setBtnStart('■ 停止', true);
+          btnPause.textContent = '▶ 继续';
+          reportToMini({ type: 'state', state: 'paused' });
+        }
+        break;
+
+      case 'resume':
+        if (state === 'paused') {
+          state = 'running';
+          updateStatus('演奏中', true);
+          btnPause.textContent = '❚❚ 暂停';
+          startAnimation();
+          reportToMini({ type: 'state', state: 'running' });
+        }
+        break;
+
+      case 'replay':
+        bpm = parseInt(bpmInput.value) || bpm;
+        if (!scoreLoaded && alphaTex) {
+          loadScore(alphaTex);
+          setTimeout(function() { handleCmd(cmd); }, 300);
+          return;
+        }
+        totalDurationMs = calcTotalDuration();
+        state = 'replay';
+        pausedElapsed = 0;
+        try { api.setBeatPosition(0); } catch(e) {}
+        updateStatus('回放中', false);
+        setBtnStart('■ 停止', false);
+        togglePauseBtn(true);
+        btnPause.textContent = '❚❚ 暂停';
+        startAnimation();
+        reportToMini({ type: 'state', state: 'replaying' });
+        break;
+
+      case 'setBpm':
+        bpm = cmd.bpm || bpm;
+        bpmInput.value = bpm;
+        if (scoreLoaded) {
+          totalDurationMs = calcTotalDuration();
+        }
+        break;
+    }
+  }
+
+  // --- UI Events ---
+  btnStart.addEventListener('click', function() {
+    if (state === 'idle' || state === 'finished') {
+      handleCmd({ cmd: 'start' });
+    } else if (state === 'running' || state === 'replay' || state === 'paused') {
+      handleCmd({ cmd: 'stop' });
+    }
+  });
+
+  btnPause.addEventListener('click', function() {
+    if (state === 'running' || state === 'replay') {
+      handleCmd({ cmd: 'pause' });
+    } else if (state === 'paused') {
+      handleCmd({ cmd: 'resume' });
+    }
+  });
+
+  document.getElementById('bpmDown').addEventListener('click', function() {
+    var v = parseInt(bpmInput.value) || bpm;
+    v = Math.max(20, v - 5);
+    bpmInput.value = v;
+    bpm = v;
+  });
+
+  document.getElementById('bpmUp').addEventListener('click', function() {
+    var v = parseInt(bpmInput.value) || bpm;
+    v = Math.min(300, v + 5);
+    bpmInput.value = v;
+    bpm = v;
+  });
+
+  bpmInput.addEventListener('change', function() {
+    var v = parseInt(this.value);
+    if (isNaN(v) || v < 20) v = 20;
+    if (v > 300) v = 300;
+    this.value = v;
+    bpm = v;
+  });
+
+  // --- Message from mini program ---
+  window.addEventListener('message', function(e) {
+    try {
+      var msg = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+      handleCmd(msg);
+    } catch(err) {
+      console.error('Invalid message:', e.data);
+    }
+  });
+
+  // --- Signal ready ---
+  reportToMini({ type: 'ready' });
+
+  // Expose for debugging
+  window.__player = { handleCmd: handleCmd, state: function() { return state; } };
+
+  console.log('[Player] initialized');
+})();
+</script>
+</body>
+</html>
