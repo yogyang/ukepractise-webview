@@ -9,16 +9,21 @@
 var info = document.getElementById('info');
 info.textContent = 'JS 运行正常 ✅';
 
-var hash = window.location.hash;
-if (hash && hash.length > 1) {
+// Try to read from query param 'd'
+var params = new URLSearchParams(window.location.search);
+var encoded = params.get('d');
+
+if (encoded) {
   try {
-    var data = JSON.parse(decodeURIComponent(hash.substring(1)));
-    info.textContent = 'Hash 解析成功 ✅ 长度 ' + data.alphaTex.length;
+    // Try base64 decode
+    var decoded = decodeURIComponent(escape(atob(encoded)));
+    var data = JSON.parse(decoded);
+    info.textContent = '数据解析成功 ✅ ' + data.alphaTex.length + ' chars, BPM: ' + data.bpm;
   } catch(e) {
-    info.textContent = 'Hash 解析失败: ' + e.message;
+    info.textContent = '解析失败: ' + e.message;
   }
 } else {
-  info.textContent = 'Hash 为空: "' + hash + '" (URL: ' + window.location.href + ')';
+  info.textContent = '无数据参数, URL: ' + window.location.href;
 }
 </script>
 </body>
