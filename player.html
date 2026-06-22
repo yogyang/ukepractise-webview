@@ -215,7 +215,17 @@
   });
 
   // ============ PREVIEW MODE ============
-  var previewAudioTried = false;
+  var previewPendingPlayerReady = false;
+  // When player becomes ready (SoundFont loaded), auto-start playback
+  api.playerReady.on(function() {
+    console.log('[Player] Player ready, SoundFont loaded');
+    if (previewPendingPlayerReady) {
+      previewPendingPlayerReady = false;
+      try { api.playPause(); } catch(e) {}
+      console.log('[Player] MIDI playback started (deferred)');
+    }
+  });
+
   function startPreview() {
     bpm = parseInt(bpmInput.value) || bpm;
     if (!scoreLoaded && alphaTex) { loadScore(alphaTex); setTimeout(startPreview, 300); return; }
@@ -225,17 +235,16 @@
     btnPreview.textContent = '■ 停止'; btnPreview.className = 'action-btn preview playing';
     statusText.textContent = '试听中'; statusDot.className = 'status-dot active';
     infoEl.textContent = (api.score ? (api.score.title || getScoreTitle()) : '谱子') + ' · 试听中';
-    // Try MIDI audio once
-    if (!previewAudioTried && api.score) {
-      previewAudioTried = true;
-      try {
-        api.playPause();
-        console.log('[Player] MIDI playback started');
-      } catch(e) {
-        console.warn('[Player] MIDI unavailable:', e);
-      }
+    // Try MIDI audio, or wait for SoundFont
+    try {
+      api.playPause();
+      console.log('[Player] MIDI playback started');
+    } catch(e) {
+      console.warn('[Player] MIDI not ready yet, will play when SoundFont loads');
+      previewPendingPlayerReady = true;
+      infoEl.textContent = '加载音色库中，请稍候...';
     }
-    // Always do visual scroll regardless of MIDI
+    // Always do visual scroll
     animId = requestAnimationFrame(function fn() {
       if (previewState !== 'playing') return;
       var elapsed = (performance.now() - startTime);
@@ -253,6 +262,7 @@
   }
 
   function stopPreview() {
+    previewPendingPlayerReady = false;
     if (animId) { cancelAnimationFrame(animId); animId = null; }
     try { if (api.score) api.stop(); } catch(e) {}
     previewState = 'stopped';
