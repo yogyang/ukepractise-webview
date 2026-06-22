@@ -5,201 +5,220 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Session Replay</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    background: #0f0f23;
-    color: #e0e0e0;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    overflow: hidden;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
+    background:#0f0f23; color:#e0e0e0;
+    font-family:-apple-system, BlinkMacSystemFont, sans-serif;
+    overflow:hidden; height:100vh; display:flex; flex-direction:column;
   }
-  #alphaTab { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; background: #1a1a2e; }
-  #alphaTab canvas { display: block; }
-  #info { text-align: center; font-size: 12px; color: #666; padding: 6px; background: #0f0f23; }
-
+  #alphaTab { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; background:#1a1a2e; }
+  #alphaTab canvas { display:block; }
+  #info { text-align:center; font-size:12px; color:#666; padding:6px; background:#0f0f23; }
   #controls {
-    background: #16213e;
-    border-top: 1px solid #0f3460;
-    padding: 12px 20px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    background:#16213e; border-top:1px solid #0f3460;
+    padding:12px 20px 24px; display:flex; flex-direction:column; gap:10px;
   }
-  .progress-area {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .time { font-size: 13px; color: #888; font-variant-numeric: tabular-nums; min-width: 40px; }
-  .progress-track { flex:1; height:4px; background:#0f3460; border-radius:2px; position:relative; cursor:pointer; }
-  .progress-fill { height:100%; background:#1a5276; border-radius:2px; }
+  .progress-area { display:flex; align-items:center; gap:12px; }
+  .time { font-size:13px; color:#888; font-variant-numeric:tabular-nums; min-width:40px; }
+  .track { flex:1; height:4px; background:#0f3460; border-radius:2px; position:relative; cursor:pointer; }
+  .fill { height:100%; background:#1a5276; border-radius:2px; width:0%; }
   .action-row { display:flex; justify-content:center; align-items:center; gap:20px; }
-  .action-btn {
+  .btn {
     width:56px; height:56px; border-radius:50%; border:none; font-size:24px;
     cursor:pointer; display:flex; align-items:center; justify-content:center;
-    -webkit-tap-highlight-color: transparent; user-select:none;
+    -webkit-tap-highlight-color:transparent; user-select:none;
   }
-  .action-btn.primary { background:linear-gradient(135deg,#0f3460,#1a5276); color:#fff; font-size:28px; }
-  .action-btn.primary:active { background:linear-gradient(135deg,#1a5276,#0f3460); }
-  .action-btn.secondary { background:#1a1a2e; color:#888; border:1px solid #0f3460; font-size:20px; }
-  .action-btn.secondary:active { background:#2a2a3e; }
+  .btn-primary { background:linear-gradient(135deg,#0f3460,#1a5276); color:#fff; font-size:28px; }
+  .btn-primary:active { background:linear-gradient(135deg,#1a5276,#0f3460); }
+  .btn-secondary { background:#1a1a2e; color:#888; border:1px solid #0f3460; font-size:20px; }
+  .btn-secondary:active { background:#2a2a3e; }
 </style>
 </head>
 <body>
-<div id="info">等待加载...</div>
+<div id="info">加载中...</div>
 <div id="alphaTab"></div>
 <div id="controls">
   <div class="progress-area">
     <span class="time" id="currentTime">0:00</span>
-    <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="track" id="track"><div class="fill" id="fill"></div></div>
     <span class="time" id="totalTime">0:00</span>
   </div>
   <div class="action-row">
-    <button class="action-btn secondary" id="btnStop">■</button>
-    <button class="action-btn primary" id="btnPlay">▶</button>
+    <button class="btn btn-secondary" id="btnStop">■</button>
+    <button class="btn btn-primary" id="btnPlay">▶</button>
   </div>
 </div>
+<audio id="audioPlayer" style="display:none"></audio>
 
 <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.7.4/dist/alphaTab.min.js"></script>
 <script>
 (function() {
-  var alphaTabEl = document.getElementById('alphaTab');
-  var btnPlay = document.getElementById('btnPlay');
-  var btnStop = document.getElementById('btnStop');
-  var currentTimeEl = document.getElementById('currentTime');
-  var totalTimeEl = document.getElementById('totalTime');
-  var progressFill = document.getElementById('progressFill');
-  var progressTrack = document.getElementById('progressTrack');
-  var infoEl = document.getElementById('info');
-
-  var api = new alphaTab.AlphaTabApi(alphaTabEl, {
+  var api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
     core: { file: null, fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.7.4/dist/font/' },
     display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
     player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
   });
 
-  var state = 'idle'; // idle | playing | paused
+  var audio = document.getElementById('audioPlayer');
+  var btnPlay = document.getElementById('btnPlay');
+  var btnStop = document.getElementById('btnStop');
+  var currentTimeEl = document.getElementById('currentTime');
+  var totalTimeEl = document.getElementById('totalTime');
+  var fill = document.getElementById('fill');
+  var track = document.getElementById('track');
+  var infoEl = document.getElementById('info');
+
   var bpm = 100;
-  var totalDurationMs = 0;
-  var scoreLoaded = false;
-  var totalAudioDuration = 1;
+  var animId = null;
 
-  function reportToMini(msg) {
-    try { if (window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {}
+  function fmt(sec) {
+    var m = Math.floor(sec/60), s = Math.floor(sec%60);
+    return m + ':' + (s<10?'0':'') + s;
   }
 
-  function formatTime(sec) {
-    var m = Math.floor(sec / 60);
-    var s = Math.floor(sec % 60);
-    return m + ':' + (s < 10 ? '0' : '') + s;
+  function report(msg) {
+    try { if(window.wx && wx.miniProgram) wx.miniProgram.postMessage({ data: msg }); } catch(e) {}
   }
 
-  function calcTotalDur() {
-    try {
-      var score = api.score; if (!score) return 60000;
-      var beats = 0;
-      for (var i = 0; i < score.masterBars.length; i++)
-        beats += (score.masterBars[i].barBeats ? score.masterBars[i].barBeats.length : 4);
-      return (beats * 60 / bpm) * 1000;
-    } catch(e) { return 60000; }
-  }
-
-  function loadScore(text, bpmVal) {
-    bpm = bpmVal || bpm;
-    if (!text) return;
+  function loadScore(text) {
+    if(!text) return;
     try {
       api.teardown();
-      api = new alphaTab.AlphaTabApi(alphaTabEl, {
+      api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
         core: { file: null, fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.7.4/dist/font/' },
         display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
         player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
       });
       api.scoreLoaded.on(function(score) {
-        scoreLoaded = true;
-        totalDurationMs = calcTotalDur();
-        totalTimeEl.textContent = formatTime(totalAudioDuration);
-        infoEl.textContent = (score.title || '无名曲') + ' · ' + bpm + ' BPM';
-        reportToMini({ type: 'loaded' });
+        infoEl.textContent = (score.title||'无名曲') + ' · ' + bpm + ' BPM';
+        report({ type: 'loaded' });
       });
       api.load(text);
     } catch(e) { infoEl.textContent = '谱子解析失败'; }
   }
 
-  // Cursor position update from mini program
-  function setPosition(positionMs) {
-    if (!scoreLoaded) return;
-    try { api.setBeatPosition(positionMs); } catch(e) {}
+  // Sync cursor with audio position
+  function syncCursor() {
+    if (audio && audio.duration) {
+      var pos = audio.currentTime * 1000; // ms
+      try { api.setBeatPosition(pos); } catch(e) {}
+    }
   }
 
-  // Receive position updates and duration from mini program
-  window.addEventListener('message', function(e) {
-    try {
-      var msg = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-      switch (msg.cmd) {
-        case 'load':
-          totalAudioDuration = msg.duration || 1;
-          totalTimeEl.textContent = formatTime(totalAudioDuration);
-          loadScore(msg.alphaTex, msg.bpm);
-          break;
-        case 'setPosition':
-          setPosition(msg.positionMs);
-          break;
-        case 'updatePosition':
-          // Update progress display (called ~every 200ms from mini program)
-          if (msg.currentTime !== undefined) {
-            currentTimeEl.textContent = formatTime(msg.currentTime);
-            var pct = totalAudioDuration > 0 ? (msg.currentTime / totalAudioDuration) * 100 : 0;
-            progressFill.style.width = Math.min(pct, 100) + '%';
-          }
-          break;
-        case 'stateChanged':
-          state = msg.state || 'idle';
-          btnPlay.textContent = state === 'playing' ? '❚❚' : '▶';
-          if (state === 'idle') {
-            currentTimeEl.textContent = '0:00';
-            progressFill.style.width = '0%';
-          }
-          break;
-        case 'reset':
-          setPosition(0);
-          currentTimeEl.textContent = '0:00';
-          progressFill.style.width = '0%';
-          break;
+  function animate() {
+    if (!audio.paused) {
+      var ct = audio.currentTime;
+      var dur = audio.duration || 1;
+      currentTimeEl.textContent = fmt(ct);
+      fill.style.width = Math.min((ct/dur)*100, 100) + '%';
+      syncCursor();
+      if (ct >= dur - 0.1) {
+        stopPlayback();
+        return;
       }
-    } catch(err) {}
-  });
+    }
+    animId = requestAnimationFrame(animate);
+  }
 
-  // Play/Pause button
+  function startAnim() {
+    if (animId) cancelAnimationFrame(animId);
+    animId = requestAnimationFrame(animate);
+  }
+
+  function stopAnim() {
+    if (animId) { cancelAnimationFrame(animId); animId = null; }
+  }
+
+  function startPlayback() {
+    audio.play().then(function() {
+      btnPlay.textContent = '❚❚';
+      startAnim();
+      report({ type: 'state', state: 'playing' });
+    }).catch(function(e) {
+      console.error('Audio play error:', e);
+      infoEl.textContent = '音频播放失败: ' + e.message;
+    });
+  }
+
+  function pausePlayback() {
+    audio.pause();
+    stopAnim();
+    btnPlay.textContent = '▶';
+    report({ type: 'state', state: 'paused' });
+  }
+
+  function stopPlayback() {
+    audio.pause();
+    audio.currentTime = 0;
+    stopAnim();
+    btnPlay.textContent = '▶';
+    currentTimeEl.textContent = '0:00';
+    fill.style.width = '0%';
+    try { api.setBeatPosition(0); } catch(e) {}
+    report({ type: 'state', state: 'stopped' });
+  }
+
   btnPlay.addEventListener('click', function() {
-    if (state === 'idle') {
-      reportToMini({ action: 'play' });
-    } else if (state === 'playing') {
-      reportToMini({ action: 'pause' });
-    } else if (state === 'paused') {
-      reportToMini({ action: 'resume' });
+    if (audio.paused) {
+      if (audio.currentTime >= audio.duration - 0.1) audio.currentTime = 0;
+      startPlayback();
+    } else {
+      pausePlayback();
     }
   });
 
-  btnStop.addEventListener('click', function() {
-    reportToMini({ action: 'stop' });
-  });
+  btnStop.addEventListener('click', stopPlayback);
 
-  // Seek via progress bar
-  progressTrack.addEventListener('click', function(e) {
+  track.addEventListener('click', function(e) {
     var rect = this.getBoundingClientRect();
     var pct = (e.clientX - rect.left) / rect.width;
-    var seekTime = pct * totalAudioDuration;
-    // Update local display immediately
-    currentTimeEl.textContent = formatTime(seekTime);
-    progressFill.style.width = (pct * 100) + '%';
-    // Tell mini program to seek
-    reportToMini({ action: 'seek', time: seekTime });
+    var dur = audio.duration || 1;
+    audio.currentTime = pct * dur;
+    currentTimeEl.textContent = fmt(audio.currentTime);
+    fill.style.width = (pct * 100) + '%';
+    syncCursor();
   });
 
-  reportToMini({ type: 'ready' });
+  audio.addEventListener('loadedmetadata', function() {
+    totalTimeEl.textContent = fmt(audio.duration);
+    infoEl.textContent = infoEl.textContent + ' | 音频已加载';
+  });
+
+  audio.addEventListener('error', function() {
+    infoEl.textContent = '音频加载失败，尝试纯谱子滚动';
+    // Still allow manual cursor movement
+  });
+
+  // Init from URL hash
+  function initFromHash() {
+    try {
+      var hash = window.location.hash;
+      if (hash && hash.length > 1) {
+        var decoded = decodeURIComponent(hash.substring(1));
+        var data = JSON.parse(decoded);
+        if (data.alphaTex) {
+          bpm = data.bpm || 100;
+          loadScore(data.alphaTex);
+        }
+        if (data.audioPath) {
+          audio.src = data.audioPath;
+          audio.load();
+        }
+        if (!data.alphaTex && !data.audioPath) {
+          infoEl.textContent = '没有数据';
+        }
+      } else {
+        infoEl.textContent = '等待数据...';
+      }
+    } catch(e) {
+      console.error('[Replay] Hash error:', e);
+      infoEl.textContent = '数据解析失败';
+    }
+  }
+
+  initFromHash();
+  report({ type: 'ready' });
   console.log('[Replay] initialized');
 })();
 </script>
