@@ -84,7 +84,7 @@
   var api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
     core: { fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/font/' },
     display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
-    player: { enablePlayer: true, enableCursor: true, enableUserInteraction: false, soundFont: null }
+    player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
   });
 
   // --- State ---
@@ -182,47 +182,41 @@
     else stopPractice();
   });
 
-  // ============ PREVIEW MODE (MIDI playback) ============
+  // ============ PREVIEW MODE (visual scroll - same as practice but without recording) ============
   function startPreview() {
     bpm = parseInt(bpmInput.value) || bpm;
     if (!scoreLoaded && alphaTex) { loadScore(alphaTex); setTimeout(startPreview, 300); return; }
-    // Stop practice mode if running
     if (practiceState === 'running') stopPractice();
-    previewState = 'playing';
+    totalDurationMs = calcDuration();
+    previewState = 'playing'; pausedElapsed = 0; startTime = performance.now();
     btnPreview.textContent = '■ 停止'; btnPreview.className = 'action-btn preview playing';
     statusText.textContent = '试听中'; statusDot.className = 'status-dot active';
-    api.play();
+    animId = requestAnimationFrame(function fn() {
+      if (previewState !== 'playing') return;
+      var elapsed = (performance.now() - startTime);
+      timerEl.textContent = fmt(elapsed/1000);
+      if (elapsed >= totalDurationMs && totalDurationMs > 0) {
+        stopPreview();
+        btnPreview.textContent = '🎵 重播'; btnPreview.className = 'action-btn preview';
+        return;
+      }
+      try { api.setBeatPosition(elapsed); } catch(e) {}
+      animId = requestAnimationFrame(fn);
+    });
   }
 
   function stopPreview() {
-    api.stop();
+    if (animId) { cancelAnimationFrame(animId); animId = null; }
     previewState = 'stopped';
     btnPreview.textContent = '🎵 试听'; btnPreview.className = 'action-btn preview';
     statusText.textContent = '就绪'; statusDot.className = 'status-dot';
     timerEl.textContent = '0:00';
+    try { api.setBeatPosition(0); } catch(e) {}
   }
 
   btnPreview.addEventListener('click', function() {
     if (previewState === 'stopped') startPreview();
     else stopPreview();
-  });
-
-  // Listen for player state changes (preview finished)
-  api.playerStateChanged.on(function(e) {
-    if (e.state === 0) { // stopped
-      if (previewState === 'playing') {
-        previewState = 'stopped';
-        btnPreview.textContent = '🎵 试听'; btnPreview.className = 'action-btn preview';
-        statusText.textContent = '就绪'; statusDot.className = 'status-dot';
-        timerEl.textContent = '0:00';
-      }
-    }
-  });
-
-  api.positionChanged.on(function(e) {
-    if (previewState === 'playing') {
-      timerEl.textContent = fmt(e.currentTime / 1000);
-    }
   });
 
   // --- Auto-load ---
