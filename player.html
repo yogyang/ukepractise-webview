@@ -60,8 +60,35 @@
 </style>
 </head>
 <body>
+<div id="debug" style="padding:8px;background:#e8f5e9;font-size:12px;word-break:break-all;color:#333;"></div>
 <div id="info">加载中...</div>
 <div id="alphaTab"></div>
+<script>
+// Show page URL for debugging
+var dbg = document.getElementById('debug');
+dbg.textContent = 'URL: ' + window.location.href;
+// Parse hash data IMMEDIATELY (before external script loads)
+(function(){
+  var hash = window.location.hash;
+  dbg.textContent += ' | Hash: ' + hash;
+  if (hash && hash.length > 1) {
+    try {
+      var decoded = decodeURIComponent(hash.substring(1));
+      var data = JSON.parse(decoded);
+      window.__alphaTex = data.alphaTex || '';
+      window.__bpm = data.bpm || 100;
+      document.getElementById('info').textContent = '已就绪 (' + (window.__alphaTex.length) + ' chars)';
+      dbg.textContent += ' | Parsed OK';
+    } catch(e) {
+      console.error('Hash parse error:', e);
+      document.getElementById('info').textContent = '解析失败: ' + e.message;
+      dbg.textContent += ' | Parse ERROR: ' + e.message;
+    }
+  } else {
+    document.getElementById('info').textContent = '无谱子数据 (hash为空)';
+  }
+})();
+</script>
 <div id="controls">
   <div class="row">
     <div class="bpm-group">
@@ -234,20 +261,15 @@
   });
 
   function initFromHash() {
-    try {
-      var hash = window.location.hash;
-      if (hash && hash.length > 1) {
-        var decoded = decodeURIComponent(hash.substring(1));
-        var data = JSON.parse(decoded);
-        if (data.alphaTex) {
-          bpm = data.bpm || 100;
-          bpmInput.value = bpm;
-          loadScore(data.alphaTex);
-          return;
-        }
-      }
-    } catch(e) { console.error('[Player] Hash parse error:', e); }
-    document.getElementById('info').textContent = '等待谱子...';
+    var tex = window.__alphaTex;
+    var bpmVal = window.__bpm;
+    if (tex) {
+      bpm = bpmVal || 100;
+      bpmInput.value = bpm;
+      loadScore(tex);
+    } else {
+      document.getElementById('info').textContent = '等待谱子...';
+    }
   }
 
   initFromHash();
