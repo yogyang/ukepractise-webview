@@ -61,7 +61,7 @@
 <script>
 (function() {
   var api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
-    core: { file: null, fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/font/' },
+    core: { fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/font/' },
     display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
     player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
   });
@@ -90,18 +90,14 @@
   function loadScore(text) {
     if(!text) return;
     try {
-      api.teardown();
-      api = new alphaTab.AlphaTabApi(document.getElementById('alphaTab'), {
-        core: { file: null, fontDirectory: 'https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/font/' },
-        display: { staveProfile: 'tab', noteLabelMode: 'default', layoutMode: 'page' },
-        player: { enablePlayer: false, enableCursor: true, enableUserInteraction: false, soundFont: null }
-      });
-      api.scoreLoaded.on(function(score) {
-        infoEl.textContent = (score.title||'无名曲') + ' · ' + bpm + ' BPM';
-        report({ type: 'loaded' });
-      });
-      api.load(text);
-    } catch(e) { infoEl.textContent = '谱子解析失败'; }
+      api.tex(text);
+      if (api.score) {
+        infoEl.textContent = (api.score.title||'无名曲') + ' · ' + bpm + ' BPM';
+      }
+      report({ type: 'loaded' });
+    } catch(e) {
+      console.error('[Replay] tex error:', e);
+      infoEl.textContent = '谱子解析失败'; }
   }
 
   function syncCursor() {
